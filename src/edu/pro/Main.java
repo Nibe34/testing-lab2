@@ -10,7 +10,6 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class Main {
 
@@ -20,57 +19,68 @@ public class Main {
 
         LocalDateTime start = LocalDateTime.now();
 
-        Map<String, Integer> freq = new HashMap<>(50_000);
+        Map<String, Integer> freq = new HashMap<>(60_000);
 
         Charset[] encodings = {StandardCharsets.UTF_8, Charset.forName("Cp1251")};
         boolean success = false;
 
         for (Charset charset : encodings) {
             try (BufferedReader reader = Files.newBufferedReader(Paths.get(FILE_PATH), charset)) {
-                processFile(reader, freq);
+                fastProcessFile(reader, freq);
                 success = true;
                 break;
             } catch (MalformedInputException e) {
-                System.out.println("Failed to read with charset: " + charset + ", trying next...");
+                System.out.println("Failed charset: " + charset + ", trying next...");
             }
         }
 
         if (!success) {
-            throw new IOException("Cannot read file with available charsets.");
+            throw new IOException("Cannot read with available charsets.");
         }
 
-        // Sort entries by frequency
-        List<Map.Entry<String, Integer>> sorted =
-                freq.entrySet().stream()
-                        .sorted(Map.Entry.comparingByValue())
-                        .collect(Collectors.toList());
+        List<Map.Entry<String, Integer>> list = new ArrayList<>(freq.entrySet());
+        list.sort(Map.Entry.comparingByValue());
 
-        System.out.println("Top 30 most frequent words:");
-        for (int i = sorted.size() - 1; i >= Math.max(sorted.size() - 30, 0); i--) {
-            System.out.println(sorted.get(i).getKey() + " " + sorted.get(i).getValue());
+        System.out.println("Top 30:");
+        for (int i = list.size() - 1; i >= Math.max(list.size() - 30, 0); i--) {
+            Map.Entry<String, Integer> e = list.get(i);
+            System.out.println(e.getKey() + " " + e.getValue());
         }
 
         LocalDateTime finish = LocalDateTime.now();
         System.out.println("------");
-        System.out.println("Execution time (ms): " +
-                ChronoUnit.MILLIS.between(start, finish));
+        System.out.println("Execution time (ms): " + ChronoUnit.MILLIS.between(start, finish));
     }
 
-    private static void processFile(BufferedReader reader, Map<String, Integer> freq) throws IOException {
+
+
+    private static void fastProcessFile(BufferedReader reader, Map<String, Integer> freq) throws IOException {
         String line;
         while ((line = reader.readLine()) != null) {
-            StringBuilder cleaned = new StringBuilder(line.length());
-            for (char c : line.toCharArray()) {
-                if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
-                    cleaned.append(Character.toLowerCase(c));
-                else
-                    cleaned.append(' ');
-            }
-            String[] words = cleaned.toString().split("\\s+");
-            for (String w : words) {
-                if (!w.isEmpty()) {
-                    freq.merge(w, 1, Integer::sum);
+
+            char[] arr = line.toCharArray();
+            int len = arr.length;
+
+            StringBuilder sb = new StringBuilder(16);
+
+            for (int i = 0; i < len; i++) {
+                char c = arr[i];
+
+                if ((c >= 'A' && c <= 'Z')) {
+                    sb.append((char)(c + 32));
+                } else if (c >= 'a' && c <= 'z') {
+                    sb.append(c);
+                } else {
+                    if (sb.length() > 0) {
+                        String w = sb.toString();
+                        freq.merge(w, 1, Integer::sum);
+                        sb.setLength(0);
+                    }
                 }
+            }
+
+            if (sb.length() > 0) {
+                freq.merge(sb.toString(), 1, Integer::sum);
             }
         }
     }
